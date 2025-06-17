@@ -53,3 +53,7 @@
     border-color: #ff6b0a;
   }
 }
+
+.visually-hidden {
+  display: none;
+}
