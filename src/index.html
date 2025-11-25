@@ -19,6 +19,7 @@
         <div class="container">
           <ul class="categories"></ul>
           <ul class="products"></ul>
+          <div id="pagination" class="tui-pagination"></div>
           <div class="not-found">
             <div class="not-found__icon">
               <svg
@@ -42,11 +43,14 @@
               different keywords.
             </p>
           </div>
-          <button class="load-more-btn">Load More</button>
         </div>
       </section>
     </main>
+
     <load src="./partials/modal.html" />
     <script type="module" src="./home.js"></script>
+    <span class="loader"></span>
+    <button class="scroll-up hidden">&uarr;</button>
+
   </body>
 </html>

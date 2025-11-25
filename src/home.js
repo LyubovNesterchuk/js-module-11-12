@@ -1,222 +1,261 @@
-//Логіка сторінки Home
+
 import {
   fetchCategories,
   fetchProducts,
-  fetchProductById,
   fetchProductsByCategory,
-  fetchProductsBySearch
-} from './js/products-api.js';
-
+  fetchProductsById,
+  searchProducts,
+  fetchTotalProductsCount
+} from "./js/products-api.js";
 import {
   renderCategories,
   renderProducts,
-  showNotFound,
-  hideNotFound
-} from './js/render-functions.js';
+  renderProductInModal
+} from "./js/render-functions.js";
+import { refs } from "./js/refs.js";
+import {
+  addToWishlist,
+  removeFromWishlist,
+  isInWishlist,
+  getWishlist,
+  getCart,
+  addToCart,
+  removeFromCart,
+  isInCart
+} from './js/storage.js';
+import {
+  resetPagination,
+  initPagination,
+  loadProductsByPage,
+  changeTheme
+} from "./js/helpers.js";
 
-import { renderModalContent, openModal, closeModal } from './js/modal.js';
-import { refs } from './js/refs.js';
-import iziToast from 'izitoast';
-import 'izitoast/dist/css/iziToast.min.css';
-import { PRODUCTS_LIMIT } from './js/constants.js';
-
-// 🔁 Глобальні змінні стану
 let currentPage = 1;
-let currentCategory = 'All';
-let isLoading = false;
+const limit = 12;
 
-// 🟩 1. Ініціалізація сторінки
-initHome();
+const updateNavCount = () => {
+  const wishlist = getWishlist();
+  if (refs.navCount) {
+    refs.navCount.textContent = wishlist.length;
+  }
+};
 
-async function initHome() {
+const updateNavCountCart = () => {
+  const cart = getCart();
+  const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
+  if (refs.navCountCart) {
+    refs.navCountCart.textContent = totalQuantity;
+  }
+};
+
+const updateWishlistButton = (productId) => {
+  if (refs.wishButton) {
+    refs.wishButton.textContent = isInWishlist(productId)
+      ? 'Remove from Wishlist'
+      : 'Add to Wishlist';
+  }
+};
+
+const updateCartButton = (productId) => {
+  if (refs.cartButton) {
+    refs.cartButton.textContent = isInCart(productId)
+      ? 'Remove from Cart'
+      : 'Add to Cart';
+  }
+};
+
+
+document.addEventListener("DOMContentLoaded", async () => {
+  if (refs.loader) refs.loader.style.display = 'block';
+
   try {
-    // Отримуємо список категорій
+
+    changeTheme();
+
     const categories = await fetchCategories();
-    categories.unshift({ name: 'All' });
-    renderCategories(categories, refs.categoriesList);
+    renderCategories(categories);
 
-    // Показуємо першу сторінку всіх продуктів
-    currentPage = 1;
-    currentCategory = 'All';
 
-    const data = await fetchProducts(currentPage);
-    renderProducts(data.products, refs.productsList);
-    hideNotFound(refs.notFoundBlock);
+    const products = await fetchProducts(currentPage, limit);
+    renderProducts(products);
 
-    toggleLoadMore(data.total > PRODUCTS_LIMIT);
-  } catch (err) {
-    iziToast.error({ message: 'Failed to initialize page', position: 'topRight' });
-  }
-}
+    updateNavCount();
+    updateNavCountCart();
 
-// 🟨 2. Обробка кліку по категоріям
-refs.categoriesList.addEventListener('click', onCategoryClick);
 
-async function onCategoryClick(e) {
-  if (e.target.nodeName !== 'BUTTON') return;
+    const totalItems = await fetchTotalProductsCount();
+    initPagination(totalItems);
 
-  const selected = e.target.textContent;
-  currentCategory = selected;
-  currentPage = 1;
-
-  // Стилізація активної кнопки
-  
-  const allBtns = refs.categoriesList.querySelectorAll('.categories__btn');
-  allBtns.forEach(btn => btn.classList.remove('categories__btn--active'));
-  
-  const activeBtn = Array.from(allBtns).find(
-    btn => btn.textContent.trim() === currentCategory
-  );
-  
-  if (activeBtn) {
-    activeBtn.classList.add('categories__btn--active');
-  }
-
-  try {
-    let data;
-
-    if (selected === 'All') {
-      data = await fetchProducts(currentPage);
-    } else {
-      data = await fetchProductsByCategory(selected, currentPage);
-    }
-
-    if (!data.products.length) {
-      refs.productsList.innerHTML = '';
-      showNotFound(refs.notFoundBlock);
-      toggleLoadMore(false);
-    } else {
-      renderProducts(data.products, refs.productsList);
-      hideNotFound(refs.notFoundBlock);
-      toggleLoadMore(data.total > PRODUCTS_LIMIT);
-    }
-  } catch {
-    iziToast.error({ message: 'Failed to load category', position: 'topRight' });
-  }
-}
-
-// 🟦 3. Load More - пагінація
-refs.loadMoreBtn.addEventListener('click', onLoadMore);
-
-async function onLoadMore() {
-  if (isLoading) return;
-  isLoading = true;
-  refs.loadMoreBtn.disabled = true;
-  currentPage += 1;
-  
-  try {
-    let data;
-
-    if (currentCategory === 'All') {
-      data = await fetchProducts(currentPage);
-    } else {
-      data = await fetchProductsByCategory(currentCategory, currentPage);
-    }
-   
-
-    // 🟥 Ховаємо кнопку
-  
-    if (!data.products.length || currentPage * PRODUCTS_LIMIT >= data.total) {
-      toggleLoadMore(false);
-      iziToast.info({ message: 'All products loaded', position: 'topRight' });
-      return;   
-    }
-    
-   
-    const markup = data.products
-      .map(
-        ({ id, title, thumbnail, brand, category, price }) => `
-      <li class="products__item" data-id="${id}">
-        <img class="products__image" src="${thumbnail}" alt="${title}" />
-        <p class="products__title">${title}</p>
-        <p class="products__brand"><span class="products__brand--bold">Brand:</span> ${brand}</p>
-        <p class="products__category">Category: ${category}</p>
-        <p class="products__price">Price: $${price}</p>
-      </li>`
-      )
-      .join('');
-    refs.productsList.insertAdjacentHTML('beforeend', markup);
-
-    // 🔁 Перевірка після вставки
-    if ((currentPage * PRODUCTS_LIMIT) >= data.total) {
-      toggleLoadMore(false);
-      iziToast.success({ message: 'All products loaded', position: 'topRight' });
-    }
-  } catch {
-    iziToast.error({ message: 'Failed to load more products', position: 'topRight' });
+  } catch (error) {
+    console.error('Error loading data:', error);
   } finally {
-    isLoading = false;
-    refs.loadMoreBtn.disabled = false;
+    if (refs.loader) refs.loader.style.display = 'none';
   }
-}
-
-
-
-
-// 🟥 4. Модалка
-refs.productsList.addEventListener('click', onProductClick);
-
-async function onProductClick(e) {
-  const li = e.target.closest('li.products__item');
-  if (!li) return;
-  const id = li.dataset.id;
-
-  try {
-    const product = await fetchProductById(id);
-    renderModalContent(product, refs.modalContent);
-    openModal(refs.modal);
-  } catch {
-    iziToast.error({ message: 'Failed to load product info', position: 'topRight' });
-  }
-}
-
-refs.modalCloseBtn.addEventListener('click', () => closeModal(refs.modal));
-
-// 🟧 5. Пошук
-refs.searchForm.addEventListener('submit', onSearch);
-
-async function onSearch(e) {
-  e.preventDefault();
-  const query = refs.searchInput.value.trim();
-  if (!query) return;
-
-  currentCategory = 'Search';
-  currentPage = 1;
-
-  try {
-    const data = await fetchProductsBySearch(query);
-
-    if (!data.products.length) {
-      refs.productsList.innerHTML = '';
-      showNotFound(refs.notFoundBlock);
-      toggleLoadMore(false);
-    } else {
-      renderProducts(data.products, refs.productsList);
-      hideNotFound(refs.notFoundBlock);
-      toggleLoadMore(data.total > PRODUCTS_LIMIT);
-    }
-  } catch {
-    iziToast.error({ message: 'Failed to perform search', position: 'topRight' });
-  }
-}
-
-// 🟨 6. Кнопка очищення інпуту
-refs.searchClearBtn.addEventListener('click', async () => {
-  refs.searchInput.value = '';
-  currentPage = 1;
-  currentCategory = 'All';
-  const data = await fetchProducts(currentPage);
-  renderProducts(data.products, refs.productsList);
-  hideNotFound(refs.notFoundBlock);
-  toggleLoadMore(data.total > PRODUCTS_LIMIT);
 });
 
-// 🟩 Допоміжна функція
-function toggleLoadMore(shouldShow) {
-  if (shouldShow) {
-    refs.loadMoreBtn.classList.remove('visually-hidden');
-  } else {
-    refs.loadMoreBtn.classList.add('visually-hidden');
-  }
-}
 
+refs.categoriesList?.addEventListener("click", async (event) => {
+  const button = event.target.closest("button.categories__btn");
+  if (!button) return;
+
+  if (refs.loader) refs.loader.style.display = 'block';
+
+  const category = button.textContent.trim();
+  resetPagination(category);
+
+
+  refs.categoryButtons().forEach(btn => btn.classList.remove("categories__btn--active"));
+  button.classList.add("categories__btn--active");
+
+  if (refs.searchInput) refs.searchInput.value = '';
+  if (refs.clearSearchBtn) refs.clearSearchBtn.classList.add('hidden');
+  if (refs.notFoundDiv) refs.notFoundDiv.classList.remove('not-found--visible');
+
+  try {
+    let products;
+    if (category === "All") {
+      products = await fetchProducts(1, limit);
+    } else {
+      products = await fetchProductsByCategory(category, 1, limit);
+    }
+
+    if (products.length === 0) {
+      if (refs.notFoundDiv) refs.notFoundDiv.classList.add('not-found--visible');
+      refs.productsList.innerHTML = '';
+      if (refs.paginationContainer) refs.paginationContainer.style.display = 'none';
+    } else {
+      if (refs.notFoundDiv) refs.notFoundDiv.classList.remove('not-found--visible');
+      renderProducts(products);
+      if (refs.paginationContainer) refs.paginationContainer.style.display = 'flex';
+    }
+  } catch (error) {
+    console.error('Error loading category:', error);
+  } finally {
+    if (refs.loader) refs.loader.style.display = 'none';
+  }
+});
+
+
+refs.productsList?.addEventListener("click", async (event) => {
+  const target = event.target;
+  const productItem = target.closest("li.products__item");
+  if (!productItem) return;
+
+  const productId = Number(productItem.dataset.id);
+  if (!productId) return;
+
+  if (refs.loader) refs.loader.style.display = 'block';
+
+  try {
+    const product = await fetchProductsById(productId);
+    renderProductInModal(product);
+    if (refs.modal) refs.modal.classList.add("modal--is-open");
+
+    updateWishlistButton(productId);
+    updateCartButton(productId);
+
+
+    if (refs.wishButton) {
+      refs.wishButton.onclick = () => {
+        isInWishlist(productId)
+          ? removeFromWishlist(productId)
+          : addToWishlist(productId);
+        updateWishlistButton(productId);
+        updateNavCount();
+      };
+    }
+
+
+    if (refs.cartButton) {
+      refs.cartButton.onclick = () => {
+        isInCart(productId)
+          ? removeFromCart(productId)
+          : addToCart(productId);
+        updateCartButton(productId);
+        updateNavCountCart();
+      };
+    }
+  } catch (error) {
+    console.error('Error loading product:', error);
+  } finally {
+    if (refs.loader) refs.loader.style.display = 'none';
+  }
+});
+
+refs.modal?.addEventListener("click", (event) => {
+  if (event.target === refs.modal || event.target.classList.contains("modal__close-btn")) {
+    refs.modal.classList.remove("modal--is-open");
+  }
+});
+
+
+refs.searchForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const query = refs.searchInput?.value.trim();
+  if (!query) return;
+
+  if (refs.loader) refs.loader.style.display = 'block';
+
+  try {
+    const products = await searchProducts(query, currentPage, limit);
+
+    if (products.length === 0) {
+      if (refs.notFoundDiv) refs.notFoundDiv.classList.add('not-found--visible');
+      refs.productsList.innerHTML = '';
+      if (refs.loadButton) refs.loadButton.style.display = 'none';
+    } else {
+      if (refs.notFoundDiv) refs.notFoundDiv.classList.remove('not-found--visible');
+      renderProducts(products);
+    }
+  } catch (error) {
+    console.error('Error searching products:', error);
+    if (refs.notFoundDiv) refs.notFoundDiv.classList.add('not-found--visible');
+    refs.productsList.innerHTML = '';
+  } finally {
+    if (refs.loader) refs.loader.style.display = 'none';
+  }
+});
+
+
+refs.searchInput?.addEventListener('input', () => {
+  if (refs.clearSearchBtn) {
+    refs.clearSearchBtn.classList.toggle('hidden', refs.searchInput.value.trim() === '');
+  }
+});
+
+
+refs.clearSearchBtn?.addEventListener("click", async () => {
+  if (refs.searchInput) refs.searchInput.value = '';
+  if (refs.clearSearchBtn) refs.clearSearchBtn.classList.add('hidden');
+  if (refs.notFoundDiv) refs.notFoundDiv.classList.remove('not-found--visible');
+  if (refs.loader) refs.loader.style.display = 'block';
+
+  try {
+    const products = await fetchProducts(1, limit);
+    renderProducts(products);
+    if (refs.loadButton) refs.loadButton.style.display = 'block';
+  } catch (error) {
+    console.error('Error loading all products:', error);
+    refs.productsList.innerHTML = '';
+    if (refs.notFoundDiv) refs.notFoundDiv.classList.add('not-found--visible');
+  } finally {
+    if (refs.loader) refs.loader.style.display = 'none';
+  }
+});
+
+
+const scrollUpButton = document.querySelector('.scroll-up');
+if (scrollUpButton) {
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 250) {
+      scrollUpButton.classList.remove('hidden');
+    } else {
+      scrollUpButton.classList.add('hidden');
+    }
+  });
+
+  scrollUpButton.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}

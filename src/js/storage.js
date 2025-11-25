@@ -1,56 +1,119 @@
-// //Робота з localStorage
+// storage.js
 
-// const CART_KEY = 'cart';
-// const WISHLIST_KEY = 'wishlist';
+// Функція для відправки кастомної події
+const dispatchStorageEvent = (eventName) => {
+  window.dispatchEvent(new Event(eventName));
+};
 
-// export function loadFromStorage(key) {
-//   try {
-//     return JSON.parse(localStorage.getItem(key)) || [];
-//   } catch {
-//     return [];
-//   }
-// }
+// ==================== WISHLIST ====================
 
-// export function saveToStorage(key, data) {
-//   try {
-//     localStorage.setItem(key, JSON.stringify(data));
-//   } catch (err) {
-//     console.error('Error saving to localStorage:', err);
-//   }
-// }
+export const getWishlist = () => {
+  const wishlist = localStorage.getItem('wishlist');
+  return wishlist ? JSON.parse(wishlist) : [];
+};
 
-// export function addToStorage(key, id) {
-//   const items = loadFromStorage(key);
-//   if (!items.includes(id)) {
-//     items.push(id);
-//     saveToStorage(key, items);
-//   }
-// }
+export const addToWishlist = (productId) => {
+  const wishlist = getWishlist();
+  const id = Number(productId);
 
-// export function removeFromStorage(key, id) {
-//   const items = loadFromStorage(key).filter(item => item !== id);
-//   saveToStorage(key, items);
-// }
+  if (!wishlist.includes(id)) {
+    wishlist.push(id);
+    localStorage.setItem('wishlist', JSON.stringify(wishlist));
+    dispatchStorageEvent('wishlistUpdated');
+    console.log('Added to wishlist:', id);
+  }
+};
 
-// export function isInStorage(key, id) {
-//   return loadFromStorage(key).includes(id);
-// }
+export const removeFromWishlist = (productId) => {
+  const wishlist = getWishlist();
+  const id = Number(productId);
+  const filtered = wishlist.filter(item => item !== id);
 
-// export function toggleInStorage(key, id) {
-//   const items = JSON.parse(localStorage.getItem(key)) || [];
-//   const index = items.indexOf(id);
+  localStorage.setItem('wishlist', JSON.stringify(filtered));
+  dispatchStorageEvent('wishlistUpdated');
+  console.log('Removed from wishlist:', id);
+};
 
-//   if (index === -1) {
-//     items.push(id);
-//   } else {
-//     items.splice(index, 1);
-//   }
+export const isInWishlist = (productId) => {
+  const wishlist = getWishlist();
+  const id = Number(productId);
+  return wishlist.includes(id);
+};
 
-//   localStorage.setItem(key, JSON.stringify(items));
-// }
+// ==================== CART ====================
 
-// export const getCart = () => loadFromStorage(CART_KEY);
-// export const setCart = data => saveToStorage(CART_KEY, data);
+export const getCart = () => {
+  const cart = localStorage.getItem('cart');
+  return cart ? JSON.parse(cart) : [];
+};
 
-// export const getWishlist = () => loadFromStorage(WISHLIST_KEY);
-// export const setWishlist = data => saveToStorage(WISHLIST_KEY, data);
+export const addToCart = (productId, quantity = 1) => {
+  const cart = getCart();
+  const id = Number(productId);
+
+  const existingItem = cart.find(item => item.id === id);
+
+  if (existingItem) {
+    existingItem.quantity += quantity;
+  } else {
+    cart.push({ id, quantity });
+  }
+
+  localStorage.setItem('cart', JSON.stringify(cart));
+  dispatchStorageEvent('cartUpdated');
+  console.log('Added to cart:', id, 'quantity:', quantity);
+};
+
+export const removeFromCart = (productId) => {
+  const cart = getCart();
+  const id = Number(productId);
+  const filtered = cart.filter(item => item.id !== id);
+
+  localStorage.setItem('cart', JSON.stringify(filtered));
+  dispatchStorageEvent('cartUpdated');
+  console.log('Removed from cart:', id);
+};
+
+export const isInCart = (productId) => {
+  const cart = getCart();
+  const id = Number(productId);
+  return cart.some(item => item.id === id);
+};
+
+export const updateCartQuantity = (productId, quantity) => {
+  const cart = getCart();
+  const id = Number(productId);
+  const item = cart.find(item => item.id === id);
+
+  if (item) {
+    item.quantity = quantity;
+    localStorage.setItem('cart', JSON.stringify(cart));
+    dispatchStorageEvent('cartUpdated');
+    console.log('Updated cart quantity:', id, 'quantity:', quantity);
+  }
+};
+
+export const updateCartItem = (productId, quantity) => {
+  const cart = getCart();
+  const id = Number(productId);
+  const item = cart.find(item => item.id === id);
+
+  if (item) {
+    item.quantity = quantity;
+    localStorage.setItem('cart', JSON.stringify(cart));
+    dispatchStorageEvent('cartUpdated');
+    console.log('Updated cart item:', id, 'quantity:', quantity);
+  }
+};
+
+export const saveCart = (cart) => {
+  localStorage.setItem('cart', JSON.stringify(cart));
+  dispatchStorageEvent('cartUpdated');
+  console.log('Cart saved');
+};
+
+export const clearCart = () => {
+  localStorage.setItem('cart', JSON.stringify([]));
+  dispatchStorageEvent('cartUpdated');
+  console.log('Cart cleared');
+};
